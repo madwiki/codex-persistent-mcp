@@ -164,3 +164,12 @@ codex mcp get codex-persistent --json
 ### `CODEX_MCP_CWD` 要填什麼？
 
 建議填你的專案根目錄，讓 Codex 看到正確的工作區上下文。
+
+### npm 發佈需要 2FA（維護者）
+
+部分 npm 帳號在發佈套件時會被要求啟用兩步驗證（2FA），或使用可繞過 2FA 的自動化/細粒度 token。
+
+- 啟用寫入 2FA：
+  - `npm profile enable-2fa auth-and-writes`
+- 然後帶 OTP 發佈：
+  - `npm publish --otp=123456`

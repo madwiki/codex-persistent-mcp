@@ -164,3 +164,12 @@ Common when PATH is not inherited (e.g. nvm). Fix by setting:
 ### What should `CODEX_MCP_CWD` be?
 
 Set it to your project root so Codex sees the right workspace context.
+
+### npm publish requires 2FA (maintainers)
+
+Some npm accounts are required to use two-factor authentication (2FA) or an automation/granular token that can bypass 2FA when publishing.
+
+- Enable 2FA for writes:
+  - `npm profile enable-2fa auth-and-writes`
+- Then publish with a one-time password (OTP):
+  - `npm publish --otp=123456`
