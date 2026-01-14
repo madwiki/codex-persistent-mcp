@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -30,6 +38,7 @@ type CodexArgsInput = {
 const roleCardSent = new Set<string>();
 const historyRecorded = new Set<string>();
 const sessionCwd = new Map<string, string>();
+const sessionPromoted = new Set<string>();
 
 function roleCardText(): string {
   return [
@@ -90,27 +99,41 @@ function tryRegisterInCodexHistory(sessionId: string, text: string): void {
   }
 }
 
-function tryReadSessionCwdFromRollout(filePath: string): string | undefined {
+type RolloutSessionMeta = {
+  cwd?: string;
+  originator?: string;
+  source?: string;
+};
+
+function tryReadSessionMetaFromRollout(filePath: string): RolloutSessionMeta | undefined {
   try {
     const raw = readFileSync(filePath, 'utf8');
     const firstNewline = raw.indexOf('\n');
     const firstLine = (firstNewline === -1 ? raw : raw.slice(0, firstNewline)).trim();
     if (!firstLine) return undefined;
     const event = JSON.parse(firstLine);
+    if (event?.type !== 'session_meta') return undefined;
     const cwd = event?.payload?.cwd;
-    return typeof cwd === 'string' && cwd.length > 0 ? cwd : undefined;
+    const originator = event?.payload?.originator;
+    const source = event?.payload?.source;
+    return {
+      cwd: typeof cwd === 'string' && cwd.length > 0 ? cwd : undefined,
+      originator: typeof originator === 'string' && originator.length > 0 ? originator : undefined,
+      source: typeof source === 'string' && source.length > 0 ? source : undefined
+    };
   } catch {
     return undefined;
   }
 }
 
-function tryInferCwdForSession(sessionId: string): string | undefined {
-  const cached = sessionCwd.get(sessionId);
-  if (cached) return cached;
-
+function tryFindRolloutPathForSession(sessionId: string): string | undefined {
   try {
     const sessionsRoot = join(CODEX_HOME, 'sessions');
     const years = readdirSync(sessionsRoot, { withFileTypes: true }).filter((d) => d.isDirectory());
+
+    let bestPath: string | undefined;
+    let bestMtime = -1;
+
     for (const year of years) {
       const yearPath = join(sessionsRoot, year.name);
       const months = readdirSync(yearPath, { withFileTypes: true }).filter((d) => d.isDirectory());
@@ -123,20 +146,40 @@ function tryInferCwdForSession(sessionId: string): string | undefined {
           for (const file of files) {
             if (!file.name.endsWith('.jsonl')) continue;
             if (!file.name.includes(sessionId)) continue;
-            const cwd = tryReadSessionCwdFromRollout(join(dayPath, file.name));
-            if (cwd) {
-              sessionCwd.set(sessionId, cwd);
-              return cwd;
+            const fullPath = join(dayPath, file.name);
+            let mtime = 0;
+            try {
+              mtime = statSync(fullPath).mtimeMs;
+            } catch {
+              mtime = 0;
+            }
+            if (mtime > bestMtime) {
+              bestMtime = mtime;
+              bestPath = fullPath;
             }
           }
         }
       }
     }
-  } catch {
-    // Best-effort only.
-  }
 
-  return undefined;
+    return bestPath;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryInferCwdForSession(sessionId: string): string | undefined {
+  const cached = sessionCwd.get(sessionId);
+  if (cached) return cached;
+
+  const rolloutPath = tryFindRolloutPathForSession(sessionId);
+  if (!rolloutPath) return undefined;
+
+  const meta = tryReadSessionMetaFromRollout(rolloutPath);
+  if (!meta?.cwd) return undefined;
+
+  sessionCwd.set(sessionId, meta.cwd);
+  return meta.cwd;
 }
 
 function resolveCwdForCall(sessionId: string | undefined, cwd: string | undefined): string {
@@ -158,6 +201,47 @@ function resolveCwdForCall(sessionId: string | undefined, cwd: string | undefine
   throw new Error(
     'Missing required input: `cwd` could not be inferred for this `session_id`. Pass `cwd` once (repo root) to bind it.'
   );
+}
+
+function tryPromoteExecSessionToCli(sessionId: string): void {
+  if (sessionPromoted.has(sessionId)) return;
+  sessionPromoted.add(sessionId);
+
+  const rolloutPath = tryFindRolloutPathForSession(sessionId);
+  if (!rolloutPath) return;
+
+  try {
+    const raw = readFileSync(rolloutPath, 'utf8');
+    const firstNewline = raw.indexOf('\n');
+    if (firstNewline === -1) return;
+
+    const firstLine = raw.slice(0, firstNewline).trimEnd();
+    const rest = raw.slice(firstNewline + 1);
+
+    const event = JSON.parse(firstLine);
+    if (event?.type !== 'session_meta') return;
+    if (event?.payload?.id !== sessionId) return;
+    if (event?.payload?.originator !== 'codex_exec') return;
+    if (event?.payload?.source !== 'exec') return;
+
+    const updated = {
+      ...event,
+      payload: {
+        ...event.payload,
+        originator: 'codex_cli_rs',
+        source: 'cli'
+      }
+    };
+
+    const newFirstLine = JSON.stringify(updated);
+    if (newFirstLine.includes('\n')) return;
+
+    const tmpPath = `${rolloutPath}.tmp.${process.pid}.${Date.now()}`;
+    writeFileSync(tmpPath, `${newFirstLine}\n${rest}`, 'utf8');
+    renameSync(tmpPath, rolloutPath);
+  } catch {
+    // Best-effort only: avoid breaking MCP responses due to local file writes.
+  }
 }
 
 function toolResponsibility(toolName: string): string {
@@ -327,6 +411,7 @@ async function runCodexOnce({
   if (includeRoleCard) roleCardSent.add(threadId);
   sessionCwd.set(threadId, effectiveCwd);
   tryRegisterInCodexHistory(threadId, historyLabel(toolName, prompt));
+  tryPromoteExecSessionToCli(threadId);
 
   return {
     sessionId: threadId,

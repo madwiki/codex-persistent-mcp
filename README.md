@@ -46,6 +46,7 @@ antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","
 - Other agents can call Codex via MCP and still get a real persisted session.
 - Server restarts do not lose context (the context lives in Codex CLI’s session store).
 - Users can resume at any time with `codex resume <session_id>` to continue the same conversation.
+- Sessions created via MCP show up in `codex resume` for the same project (CWD).
 
 ## Requirements
 

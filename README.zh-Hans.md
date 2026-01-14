@@ -46,6 +46,7 @@ antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","
 - 其他 Agent 通过 MCP 调用 Codex，也能产生真实可恢复的 session。
 - MCP server 重启/关闭不丢上下文（上下文存于 Codex CLI 的 session store）。
 - 用户可随时用 `codex resume <session_id>` 进入同一会话补充信息/接力对话。
+- 通过 MCP 创建的会话会在同一项目目录（CWD）的 `codex resume` 中可见。
 
 ## 依赖
 
