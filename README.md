@@ -78,13 +78,13 @@ npm start
 This server exposes 3 tools (all return `session_id` and `resume_command`):
 
 - `codex_chat`
-  - input: `session_id?` (UUID), `prompt`, `model?`, `reasoning_effort?`, `timeout_ms?`
+  - input: `session_id?` (UUID), `prompt`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `reply`, `resume_command` (e.g. `codex resume <session_id>`), `usage?`
 - `codex_guard_plan`
-  - input: `session_id?`, `requirements`, `plan`, `constraints?`, `model?`, `reasoning_effort?`, `timeout_ms?`
+  - input: `session_id?`, `requirements`, `plan`, `constraints?`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `critique`, `resume_command`, `usage?`
 - `codex_guard_final`
-  - input: `session_id?`, `change_summary`, `test_results?`, `open_questions?`, `model?`, `reasoning_effort?`, `timeout_ms?`
+  - input: `session_id?`, `change_summary`, `test_results?`, `open_questions?`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `review`, `resume_command`, `usage?`
 
 ## How it works (why `codex resume` works)
@@ -108,6 +108,10 @@ Requests for the same `session_id` are serialized to avoid out-of-order writes.
 - `CODEX_BIN`: path to the `codex` executable (default: `codex`)
 - `CODEX_MCP_CWD`: working directory passed to `codex -C` (default: MCP server `process.cwd()`)
 - `CODEX_PERSISTENT_MCP_ORIGIN`: identifier injected into every prompt (default: `codex-persistent-mcp`)
+- `CODEX_PERSISTENT_MCP_WRITE_SESSION_FILE`: set to `0` to disable writing `<cwd>/.claude/codex_session.json` (default: enabled)
+- `CODEX_PERSISTENT_MCP_SESSION_FILE`: optional override for the session file path (absolute or relative to `cwd`)
+
+Tool input `cwd` (when provided) overrides `CODEX_MCP_CWD` for that request.
 
 ## “AI vs human” attribution
 

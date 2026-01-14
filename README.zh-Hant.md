@@ -78,13 +78,13 @@ npm start
 本 server 暴露 3 個工具（都會回傳 `session_id` 與 `resume_command`）：
 
 - `codex_chat`
-  - 輸入：`session_id?`（UUID）、`prompt`、`model?`、`reasoning_effort?`、`timeout_ms?`
+  - 輸入：`session_id?`（UUID）、`prompt`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 輸出：`session_id`、`reply`、`resume_command`（例如 `codex resume <session_id>`）、`usage?`
 - `codex_guard_plan`
-  - 輸入：`session_id?`、`requirements`、`plan`、`constraints?`、`model?`、`reasoning_effort?`、`timeout_ms?`
+  - 輸入：`session_id?`、`requirements`、`plan`、`constraints?`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 輸出：`session_id`、`critique`、`resume_command`、`usage?`
 - `codex_guard_final`
-  - 輸入：`session_id?`、`change_summary`、`test_results?`、`open_questions?`、`model?`、`reasoning_effort?`、`timeout_ms?`
+  - 輸入：`session_id?`、`change_summary`、`test_results?`、`open_questions?`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 輸出：`session_id`、`review`、`resume_command`、`usage?`
 
 ## 運作原理（為什麼能 `codex resume`）
@@ -108,6 +108,10 @@ npm start
 - `CODEX_BIN`：`codex` 可執行檔路徑（預設 `codex`）
 - `CODEX_MCP_CWD`：傳給 `codex -C` 的工作目錄（預設 MCP server 的 `process.cwd()`）
 - `CODEX_PERSISTENT_MCP_ORIGIN`：注入到每次請求裡的識別字（預設 `codex-persistent-mcp`）
+- `CODEX_PERSISTENT_MCP_WRITE_SESSION_FILE`：設為 `0` 可停用寫入 `<cwd>/.claude/codex_session.json`（預設啟用）
+- `CODEX_PERSISTENT_MCP_SESSION_FILE`：可選，覆蓋 session 檔案路徑（絕對路徑或相對 `cwd` 的路徑）
+
+若 tool 輸入有傳 `cwd`，該請求會優先使用它（覆蓋 `CODEX_MCP_CWD`）。
 
 ## 「AI vs 人」標記
 

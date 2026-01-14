@@ -1,6 +1,6 @@
 {
   "name": "codex-persistent-mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "An MCP (stdio) server that proxies OpenAI Codex CLI with persisted sessions via `codex resume` (multi-agent friendly, e.g. Claude Code).",
   "main": "dist/server.js",
   "bin": {
