@@ -41,13 +41,13 @@ npm start
 本 server 暴露 3 個工具（都會回傳 `session_id` 與 `resume_command`）：
 
 - `codex_chat`
-  - 輸入：`session_id?`（UUID）、`prompt`、`model?`、`timeout_ms?`
+  - 輸入：`session_id?`（UUID）、`prompt`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 輸出：`session_id`、`reply`、`resume_command`（例如 `codex resume <session_id>`）、`usage?`
 - `codex_guard_plan`
-  - 輸入：`session_id?`、`requirements`、`plan`、`constraints?`、`model?`、`timeout_ms?`
+  - 輸入：`session_id?`、`requirements`、`plan`、`constraints?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 輸出：`session_id`、`critique`、`resume_command`、`usage?`
 - `codex_guard_final`
-  - 輸入：`session_id?`、`change_summary`、`test_results?`、`open_questions?`、`model?`、`timeout_ms?`
+  - 輸入：`session_id?`、`change_summary`、`test_results?`、`open_questions?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 輸出：`session_id`、`review`、`resume_command`、`usage?`
 
 ## 運作原理（為什麼能 `codex resume`）
@@ -70,6 +70,24 @@ npm start
 
 - `CODEX_BIN`：`codex` 可執行檔路徑（預設 `codex`）
 - `CODEX_MCP_CWD`：傳給 `codex -C` 的工作目錄（預設 MCP server 的 `process.cwd()`）
+- `CODEX_PERSISTENT_MCP_ORIGIN`：注入到每次請求裡的識別字（預設 `codex-persistent-mcp`）
+
+## 「AI vs 人」標記
+
+Codex CLI 預設並不知道輸入是來自 MCP 的其他 AI 或是使用者本人。
+
+本 server 會在每次請求前自動注入一個 header，讓 Codex 會話可以把訊息標記為「AI agent via MCP（非使用者本人）」。
+
+## 每次呼叫的 model + reasoning 覆蓋
+
+預設情況下，Codex CLI 會讀取 `~/.codex/config.toml`（例如 `model` 與 `model_reasoning_effort`）。
+
+本 MCP 支援對單次呼叫即時覆蓋：
+
+- `model`：透傳為 `codex exec -m <model>`，只對本次請求生效
+- `reasoning_effort`：透傳為 `codex exec -c model_reasoning_effort="..."`，只對本次請求生效
+
+不傳上述欄位時，會完全遵循 Codex CLI 的預設配置。
 
 ## 在 Claude Code 裡設定這個 MCP
 

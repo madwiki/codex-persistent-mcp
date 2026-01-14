@@ -7,14 +7,35 @@ import * as z from 'zod/v4';
 const WORKSPACE_ROOT = process.env.CODEX_MCP_CWD ?? process.cwd();
 const CODEX_BIN = process.env.CODEX_BIN ?? 'codex';
 const DEFAULT_TIMEOUT_MS = 120_000;
+const MCP_ORIGIN = process.env.CODEX_PERSISTENT_MCP_ORIGIN ?? 'codex-persistent-mcp';
 
 type CodexArgsInput = {
   sessionId?: string;
   prompt: string;
   model?: string;
+  reasoningEffort?: string;
 };
 
-function buildCodexArgs({ sessionId, prompt, model }: CodexArgsInput): string[] {
+function injectMcpHeader(toolName: string, userText: string): string {
+  const headerLines = [
+    '[MCP]',
+    `origin=${MCP_ORIGIN}`,
+    `tool=${toolName}`,
+    'sender=ai_agent',
+    'human_sender=false',
+    `timestamp=${new Date().toISOString()}`,
+    '',
+    'Note: This message was sent via MCP by an AI agent (not a human).'
+  ];
+  return `${headerLines.join('\n')}\n\n${userText}`;
+}
+
+function tomlString(value: string): string {
+  const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `"${escaped}"`;
+}
+
+function buildCodexArgs({ sessionId, prompt, model, reasoningEffort }: CodexArgsInput): string[] {
   const base = [
     'exec',
     '--skip-git-repo-check',
@@ -24,6 +45,7 @@ function buildCodexArgs({ sessionId, prompt, model }: CodexArgsInput): string[] 
   ];
 
   if (model) base.push('-m', model);
+  if (reasoningEffort) base.push('-c', `model_reasoning_effort=${tomlString(reasoningEffort)}`);
 
   if (sessionId) return [...base, 'resume', sessionId, prompt];
   return [...base, prompt];
@@ -31,8 +53,10 @@ function buildCodexArgs({ sessionId, prompt, model }: CodexArgsInput): string[] 
 
 type CodexRunInput = {
   sessionId?: string;
+  toolName: string;
   prompt: string;
   model?: string;
+  reasoningEffort?: string;
   timeoutMs?: number;
 };
 
@@ -44,11 +68,14 @@ type CodexRunResult = {
 
 async function runCodexOnce({
   sessionId,
+  toolName,
   prompt,
   model,
+  reasoningEffort,
   timeoutMs = DEFAULT_TIMEOUT_MS
 }: CodexRunInput): Promise<CodexRunResult> {
-  const args = buildCodexArgs({ sessionId, prompt, model });
+  const effectivePrompt = injectMcpHeader(toolName, prompt);
+  const args = buildCodexArgs({ sessionId, prompt: effectivePrompt, model, reasoningEffort });
 
   const child = spawn(CODEX_BIN, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -162,6 +189,11 @@ server.registerTool(
       session_id: z.string().uuid().optional().describe('Existing Codex session id (UUID).'),
       prompt: z.string().min(1).describe('User message to send to Codex.'),
       model: z.string().optional().describe('Optional Codex model override.'),
+      reasoning_effort: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional per-request override for model_reasoning_effort (e.g. low, medium, high).'),
       timeout_ms: z.number().int().min(1_000).max(600_000).optional().describe('Execution timeout.')
     },
     outputSchema: {
@@ -171,9 +203,16 @@ server.registerTool(
       usage: z.any().optional()
     }
   },
-  async ({ session_id, prompt, model, timeout_ms }) => {
+  async ({ session_id, prompt, model, reasoning_effort, timeout_ms }) => {
     const result = await enqueueBySession(session_id, () =>
-      runCodexOnce({ sessionId: session_id, prompt, model, timeoutMs: timeout_ms })
+      runCodexOnce({
+        sessionId: session_id,
+        toolName: 'codex_chat',
+        prompt,
+        model,
+        reasoningEffort: reasoning_effort,
+        timeoutMs: timeout_ms
+      })
     );
     const structuredContent = {
       session_id: result.sessionId,
@@ -198,6 +237,11 @@ server.registerTool(
       plan: z.string().min(1).describe('Proposed plan to critique.'),
       constraints: z.string().optional().describe('Optional constraints (tech, time, safety).'),
       model: z.string().optional().describe('Optional Codex model override.'),
+      reasoning_effort: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional per-request override for model_reasoning_effort (e.g. low, medium, high).'),
       timeout_ms: z.number().int().min(1_000).max(600_000).optional().describe('Execution timeout.')
     },
     outputSchema: {
@@ -207,7 +251,7 @@ server.registerTool(
       usage: z.any().optional()
     }
   },
-  async ({ session_id, requirements, plan, constraints, model, timeout_ms }) => {
+  async ({ session_id, requirements, plan, constraints, model, reasoning_effort, timeout_ms }) => {
     const prompt = [
       'You are Codex acting as a strict senior engineering reviewer.',
       'Respond in Chinese.',
@@ -229,7 +273,14 @@ server.registerTool(
       .join('\n');
 
     const result = await enqueueBySession(session_id, () =>
-      runCodexOnce({ sessionId: session_id, prompt, model, timeoutMs: timeout_ms })
+      runCodexOnce({
+        sessionId: session_id,
+        toolName: 'codex_guard_plan',
+        prompt,
+        model,
+        reasoningEffort: reasoning_effort,
+        timeoutMs: timeout_ms
+      })
     );
 
     const structuredContent = {
@@ -256,6 +307,11 @@ server.registerTool(
       test_results: z.string().optional().describe('Test results or commands run.'),
       open_questions: z.string().optional().describe('Anything uncertain that needs a decision.'),
       model: z.string().optional().describe('Optional Codex model override.'),
+      reasoning_effort: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional per-request override for model_reasoning_effort (e.g. low, medium, high).'),
       timeout_ms: z.number().int().min(1_000).max(600_000).optional().describe('Execution timeout.')
     },
     outputSchema: {
@@ -265,7 +321,15 @@ server.registerTool(
       usage: z.any().optional()
     }
   },
-  async ({ session_id, change_summary, test_results, open_questions, model, timeout_ms }) => {
+  async ({
+    session_id,
+    change_summary,
+    test_results,
+    open_questions,
+    model,
+    reasoning_effort,
+    timeout_ms
+  }) => {
     const prompt = [
       'You are Codex acting as a strict senior engineering reviewer.',
       'Respond in Chinese.',
@@ -286,7 +350,14 @@ server.registerTool(
       .join('\n');
 
     const result = await enqueueBySession(session_id, () =>
-      runCodexOnce({ sessionId: session_id, prompt, model, timeoutMs: timeout_ms })
+      runCodexOnce({
+        sessionId: session_id,
+        toolName: 'codex_guard_final',
+        prompt,
+        model,
+        reasoningEffort: reasoning_effort,
+        timeoutMs: timeout_ms
+      })
     );
 
     const structuredContent = {

@@ -41,13 +41,13 @@ npm start
 This server exposes 3 tools (all return `session_id` and `resume_command`):
 
 - `codex_chat`
-  - input: `session_id?` (UUID), `prompt`, `model?`, `timeout_ms?`
+  - input: `session_id?` (UUID), `prompt`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `reply`, `resume_command` (e.g. `codex resume <session_id>`), `usage?`
 - `codex_guard_plan`
-  - input: `session_id?`, `requirements`, `plan`, `constraints?`, `model?`, `timeout_ms?`
+  - input: `session_id?`, `requirements`, `plan`, `constraints?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `critique`, `resume_command`, `usage?`
 - `codex_guard_final`
-  - input: `session_id?`, `change_summary`, `test_results?`, `open_questions?`, `model?`, `timeout_ms?`
+  - input: `session_id?`, `change_summary`, `test_results?`, `open_questions?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `review`, `resume_command`, `usage?`
 
 ## How it works (why `codex resume` works)
@@ -70,6 +70,24 @@ Requests for the same `session_id` are serialized to avoid out-of-order writes.
 
 - `CODEX_BIN`: path to the `codex` executable (default: `codex`)
 - `CODEX_MCP_CWD`: working directory passed to `codex -C` (default: MCP server `process.cwd()`)
+- `CODEX_PERSISTENT_MCP_ORIGIN`: identifier injected into every prompt (default: `codex-persistent-mcp`)
+
+## “AI vs human” attribution
+
+Codex CLI does not automatically know that an input came from another AI via MCP.
+
+This server always injects a small header into every request so the Codex session can attribute messages as coming from an AI agent over MCP (not a human user).
+
+## Per-request model + reasoning overrides
+
+By default, Codex CLI reads your `~/.codex/config.toml` (e.g. `model` and `model_reasoning_effort`).
+
+This MCP server supports per-request overrides:
+
+- `model`: passed to `codex exec -m <model>` for that request only
+- `reasoning_effort`: passed as `codex exec -c model_reasoning_effort="..."` for that request only
+
+If you do not pass these fields, the request follows Codex CLI defaults.
 
 ## Configure in Claude Code
 
