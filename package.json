@@ -1,6 +1,6 @@
 {
   "name": "codex-persistent-mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "An MCP (stdio) server that proxies Codex CLI sessions with real persistence via `codex resume`.",
   "main": "dist/server.js",
   "bin": {

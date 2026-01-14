@@ -4,6 +4,43 @@ English | [Chinese (Simplified)](README.zh-Hans.md) | [Chinese (Traditional)](RE
 
 A thin MCP (stdio) server that delegates **session persistence** to your local `codex-cli`, so MCP calls also create real sessions that users can later continue with `codex resume <session_id>`.
 
+## Quick start (recommended: npx auto-update)
+
+### Claude Code
+
+```bash
+claude mcp add-json --scope user codex-persistent \
+  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+```
+
+Verify:
+
+```bash
+claude mcp list
+claude mcp get codex-persistent
+```
+
+### Codex CLI
+
+```bash
+codex mcp add codex-persistent --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project -- npx -y codex-persistent-mcp
+```
+
+Verify:
+
+```bash
+codex mcp list --json
+codex mcp get codex-persistent --json
+```
+
+### Antigravity
+
+Antigravity supports adding MCP servers via `--add-mcp`:
+
+```bash
+antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+```
+
 ## What this solves
 
 - Other agents can call Codex via MCP and still get a real persisted session.
@@ -89,80 +126,14 @@ This MCP server supports per-request overrides:
 
 If you do not pass these fields, the request follows Codex CLI defaults.
 
-## Configure in Claude Code
+## Version pinning vs auto-update
 
-Claude Code provides `claude mcp ...` commands.
+`npx -y codex-persistent-mcp` generally pulls the latest version, which is convenient but less reproducible.
 
-1) Build:
-
-```bash
-npm run build
-```
-
-2) Add as a stdio MCP server (use absolute paths):
+To pin a version:
 
 ```bash
-claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
-```
-
-If installed globally, you can also use:
-
-```bash
-claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
-```
-
-If published to npm, you can use `npx` without cloning:
-
-```bash
-claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
-```
-
-Optional: use `--scope user` to enable for all projects:
-
-```bash
-claude mcp add --scope user -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
-```
-
-Verify:
-
-```bash
-claude mcp list
-claude mcp get codex-persistent
-```
-
-## Configure in Codex CLI
-
-Codex CLI provides `codex mcp ...` commands.
-
-1) Build:
-
-```bash
-npm run build
-```
-
-2) Add as a stdio MCP server:
-
-```bash
-codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
-```
-
-If installed globally:
-
-```bash
-codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
-```
-
-If published to npm (no clone):
-
-```bash
-codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
-```
-
-Verify:
-
-```bash
-codex mcp list --json
-codex mcp get codex-persistent --json
+npx -y codex-persistent-mcp@0.1.3
 ```
 
 ## Suggested workflow (two-agent guardrail)

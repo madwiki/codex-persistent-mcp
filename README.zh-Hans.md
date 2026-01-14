@@ -4,6 +4,43 @@
 
 一个很薄的 MCP（stdio）Server：把**会话持久化**交给本机 `codex-cli`，使得通过 MCP 调用也能生成真实 session，之后用户可以用 `codex resume <session_id>` 接力继续聊。
 
+## 快速开始（推荐：npx 自动更新）
+
+### Claude Code
+
+```bash
+claude mcp add-json --scope user codex-persistent \
+  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+```
+
+验证：
+
+```bash
+claude mcp list
+claude mcp get codex-persistent
+```
+
+### Codex CLI
+
+```bash
+codex mcp add codex-persistent --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project -- npx -y codex-persistent-mcp
+```
+
+验证：
+
+```bash
+codex mcp list --json
+codex mcp get codex-persistent --json
+```
+
+### Antigravity
+
+Antigravity 支持用 `--add-mcp` 添加 MCP server：
+
+```bash
+antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+```
+
 ## 解决的问题
 
 - 其他 Agent 通过 MCP 调用 Codex，也能产生真实可恢复的 session。
@@ -93,34 +130,18 @@ Codex CLI 默认并不知道输入是来自 MCP 的其他 AI 还是用户本人�
 
 Claude Code 提供 `claude mcp ...` 管理命令。
 
-1) 先 build：
+推荐用 `add-json` 配置（可以同时设置 env，并用 `npx -y` 方式启动）：
 
 ```bash
-npm run build
+claude mcp add-json --scope user codex-persistent \
+  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
 ```
 
-2) 添加为 stdio MCP server（建议用绝对路径）：
+如果你想固定版本（可复现）：
 
 ```bash
-claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
-```
-
-如果已全局安装，也可以这样写：
-
-```bash
-claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
-```
-
-如果已发布到 npm，也可以不 clone 仓库直接用 `npx`：
-
-```bash
-claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
-```
-
-可选：加 `--scope user` 对所有项目生效：
-
-```bash
-claude mcp add --scope user -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
+claude mcp add-json --scope user codex-persistent \
+  '{"command":"npx","args":["-y","codex-persistent-mcp@0.1.2"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
 ```
 
 验证：
@@ -163,6 +184,16 @@ codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absol
 ```bash
 codex mcp list --json
 codex mcp get codex-persistent --json
+```
+
+## 版本固定与自动更新
+
+`npx -y codex-persistent-mcp` 一般会拉取最新版本，方便但可复现性更差。
+
+如果要固定版本：
+
+```bash
+npx -y codex-persistent-mcp@0.1.3
 ```
 
 ## 推荐用法（双 Agent 把关）
