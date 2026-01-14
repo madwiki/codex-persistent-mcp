@@ -108,8 +108,6 @@ Requests for the same `session_id` are serialized to avoid out-of-order writes.
 - `CODEX_BIN`: path to the `codex` executable (default: `codex`)
 - `CODEX_MCP_CWD`: working directory passed to `codex -C` (default: MCP server `process.cwd()`)
 - `CODEX_PERSISTENT_MCP_ORIGIN`: identifier injected into every prompt (default: `codex-persistent-mcp`)
-- `CODEX_PERSISTENT_MCP_WRITE_SESSION_FILE`: set to `0` to disable writing `<cwd>/.claude/codex_session.json` (default: enabled)
-- `CODEX_PERSISTENT_MCP_SESSION_FILE`: optional override for the session file path (absolute or relative to `cwd`)
 
 Tool input `cwd` (when provided) overrides `CODEX_MCP_CWD` for that request.
 

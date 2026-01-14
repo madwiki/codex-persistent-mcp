@@ -108,8 +108,6 @@ npm start
 - `CODEX_BIN`：`codex` 可執行檔路徑（預設 `codex`）
 - `CODEX_MCP_CWD`：傳給 `codex -C` 的工作目錄（預設 MCP server 的 `process.cwd()`）
 - `CODEX_PERSISTENT_MCP_ORIGIN`：注入到每次請求裡的識別字（預設 `codex-persistent-mcp`）
-- `CODEX_PERSISTENT_MCP_WRITE_SESSION_FILE`：設為 `0` 可停用寫入 `<cwd>/.claude/codex_session.json`（預設啟用）
-- `CODEX_PERSISTENT_MCP_SESSION_FILE`：可選，覆蓋 session 檔案路徑（絕對路徑或相對 `cwd` 的路徑）
 
 若 tool 輸入有傳 `cwd`，該請求會優先使用它（覆蓋 `CODEX_MCP_CWD`）。
 

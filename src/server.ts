@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as z from 'zod/v4';
@@ -18,9 +18,6 @@ const CODEX_HISTORY_PATH =
   join(CODEX_HOME, 'history.jsonl');
 const REGISTER_IN_CODEX_HISTORY =
   (process.env.CODEX_PERSISTENT_MCP_REGISTER_IN_CODEX_HISTORY ?? '1') !== '0';
-const WRITE_SESSION_FILE =
-  (process.env.CODEX_PERSISTENT_MCP_WRITE_SESSION_FILE ?? '1') !== '0';
-const SESSION_FILE_PATH_OVERRIDE = process.env.CODEX_PERSISTENT_MCP_SESSION_FILE;
 
 type CodexArgsInput = {
   sessionId?: string;
@@ -89,38 +86,6 @@ function tryRegisterInCodexHistory(sessionId: string, text: string): void {
     historyRecorded.add(sessionId);
   } catch {
     // Best-effort only: avoid breaking MCP responses due to local history indexing.
-  }
-}
-
-function normalizeCwd(cwd: string): string {
-  return isAbsolute(cwd) ? cwd : join(WORKSPACE_ROOT, cwd);
-}
-
-function resolveSessionFilePath(cwd: string): string | undefined {
-  if (!WRITE_SESSION_FILE) return undefined;
-
-  const override = SESSION_FILE_PATH_OVERRIDE?.trim();
-  if (override) return isAbsolute(override) ? override : join(cwd, override);
-
-  return join(cwd, '.claude', 'codex_session.json');
-}
-
-function tryWriteSessionFile(cwd: string, sessionId: string, toolName: string): void {
-  const sessionFilePath = resolveSessionFilePath(cwd);
-  if (!sessionFilePath) return;
-
-  try {
-    mkdirSync(dirname(sessionFilePath), { recursive: true });
-    const payload = {
-      session_id: sessionId,
-      tool: toolName,
-      origin: MCP_ORIGIN,
-      cwd,
-      updated_at: new Date().toISOString()
-    };
-    writeFileSync(sessionFilePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  } catch {
-    // Best-effort only: avoid breaking MCP responses due to local file writes.
   }
 }
 
@@ -202,11 +167,10 @@ async function runCodexOnce({
     ROLE_CARD_ENABLED && (!sessionId || !roleCardSent.has(sessionId));
   if (includeRoleCard && sessionId) roleCardSent.add(sessionId);
 
-  const effectiveCwd = normalizeCwd(cwd ?? WORKSPACE_ROOT);
   const effectivePrompt = injectMcpHeader(toolName, prompt, includeRoleCard);
   const args = buildCodexArgs({
     sessionId,
-    cwd: effectiveCwd,
+    cwd: cwd ?? WORKSPACE_ROOT,
     prompt: effectivePrompt,
     model,
     reasoningEffort
@@ -290,7 +254,6 @@ async function runCodexOnce({
 
   if (includeRoleCard) roleCardSent.add(threadId);
   tryRegisterInCodexHistory(threadId, historyLabel(toolName, prompt));
-  tryWriteSessionFile(effectiveCwd, threadId, toolName);
 
   return {
     sessionId: threadId,
