@@ -1,0 +1,53 @@
+{
+  "name": "codex-persistent-mcp",
+  "version": "0.1.0",
+  "description": "An MCP (stdio) server that proxies Codex CLI sessions with real persistence via `codex resume`.",
+  "main": "dist/server.js",
+  "bin": {
+    "codex-persistent-mcp": "bin/codex-persistent-mcp.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "start": "node dist/server.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "codex",
+    "codex-cli",
+    "claude-code",
+    "stdio",
+    "agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "README.md",
+    "README.zh-Hans.md",
+    "README.zh-Hant.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<YOUR_GITHUB_USERNAME>/codex-persistent-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/<YOUR_GITHUB_USERNAME>/codex-persistent-mcp/issues"
+  },
+  "homepage": "https://github.com/<YOUR_GITHUB_USERNAME>/codex-persistent-mcp#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.8",
+    "typescript": "^5.9.3"
+  }
+}
