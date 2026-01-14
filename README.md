@@ -10,7 +10,7 @@ A thin MCP (stdio) server that delegates **session persistence** to your local `
 
 ```bash
 claude mcp add-json --scope user codex-persistent \
-  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex"}}'
 ```
 
 Verify:
@@ -23,7 +23,7 @@ claude mcp get codex-persistent
 ### Codex CLI
 
 ```bash
-codex mcp add codex-persistent --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project -- npx -y codex-persistent-mcp
+codex mcp add codex-persistent --env CODEX_BIN=/absolute/path/to/codex -- npx -y codex-persistent-mcp
 ```
 
 Verify:
@@ -38,7 +38,7 @@ codex mcp get codex-persistent --json
 Antigravity supports adding MCP servers via `--add-mcp`:
 
 ```bash
-antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex"}}'
 ```
 
 ## What this solves
@@ -106,10 +106,14 @@ Requests for the same `session_id` are serialized to avoid out-of-order writes.
 ## Environment variables
 
 - `CODEX_BIN`: path to the `codex` executable (default: `codex`)
-- `CODEX_MCP_CWD`: working directory passed to `codex -C` (default: MCP server `process.cwd()`)
 - `CODEX_PERSISTENT_MCP_ORIGIN`: identifier injected into every prompt (default: `codex-persistent-mcp`)
+ 
+## Working directory (`cwd`)
 
-Tool input `cwd` (when provided) overrides `CODEX_MCP_CWD` for that request.
+Codex stores session metadata including the workspace CWD, and `codex resume` filters sessions by CWD by default.
+
+- When starting a new session (no `session_id`), you must pass `cwd` (repo root).
+- When resuming (with `session_id`), `cwd` is optional: the server will reuse or infer it from Codex’s local session store.
 
 ## “AI vs human” attribution
 
@@ -152,9 +156,9 @@ Common when PATH is not inherited (e.g. nvm). Fix by setting:
 
 - `CODEX_BIN=/absolute/path/to/codex` (use `which codex` to find it)
 
-### What should `CODEX_MCP_CWD` be?
+### Why pass `cwd`?
 
-Set it to your project root so Codex sees the right workspace context.
+Pass your project root so Codex records the correct workspace context and `codex resume` shows the session in that repo by default.
 
 ### npm publish requires 2FA (maintainers)
 

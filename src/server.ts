@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as z from 'zod/v4';
 
-const WORKSPACE_ROOT = process.env.CODEX_MCP_CWD ?? process.cwd();
+const SERVER_CWD = process.cwd();
 const CODEX_BIN = process.env.CODEX_BIN ?? 'codex';
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MCP_ORIGIN = process.env.CODEX_PERSISTENT_MCP_ORIGIN ?? 'codex-persistent-mcp';
@@ -29,6 +29,7 @@ type CodexArgsInput = {
 
 const roleCardSent = new Set<string>();
 const historyRecorded = new Set<string>();
+const sessionCwd = new Map<string, string>();
 
 function roleCardText(): string {
   return [
@@ -87,6 +88,76 @@ function tryRegisterInCodexHistory(sessionId: string, text: string): void {
   } catch {
     // Best-effort only: avoid breaking MCP responses due to local history indexing.
   }
+}
+
+function tryReadSessionCwdFromRollout(filePath: string): string | undefined {
+  try {
+    const raw = readFileSync(filePath, 'utf8');
+    const firstNewline = raw.indexOf('\n');
+    const firstLine = (firstNewline === -1 ? raw : raw.slice(0, firstNewline)).trim();
+    if (!firstLine) return undefined;
+    const event = JSON.parse(firstLine);
+    const cwd = event?.payload?.cwd;
+    return typeof cwd === 'string' && cwd.length > 0 ? cwd : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryInferCwdForSession(sessionId: string): string | undefined {
+  const cached = sessionCwd.get(sessionId);
+  if (cached) return cached;
+
+  try {
+    const sessionsRoot = join(CODEX_HOME, 'sessions');
+    const years = readdirSync(sessionsRoot, { withFileTypes: true }).filter((d) => d.isDirectory());
+    for (const year of years) {
+      const yearPath = join(sessionsRoot, year.name);
+      const months = readdirSync(yearPath, { withFileTypes: true }).filter((d) => d.isDirectory());
+      for (const month of months) {
+        const monthPath = join(yearPath, month.name);
+        const days = readdirSync(monthPath, { withFileTypes: true }).filter((d) => d.isDirectory());
+        for (const day of days) {
+          const dayPath = join(monthPath, day.name);
+          const files = readdirSync(dayPath, { withFileTypes: true }).filter((d) => d.isFile());
+          for (const file of files) {
+            if (!file.name.endsWith('.jsonl')) continue;
+            if (!file.name.includes(sessionId)) continue;
+            const cwd = tryReadSessionCwdFromRollout(join(dayPath, file.name));
+            if (cwd) {
+              sessionCwd.set(sessionId, cwd);
+              return cwd;
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Best-effort only.
+  }
+
+  return undefined;
+}
+
+function resolveCwdForCall(sessionId: string | undefined, cwd: string | undefined): string {
+  if (!sessionId) {
+    if (!cwd) {
+      throw new Error('Missing required input: `cwd` is required when starting a new session.');
+    }
+    return cwd;
+  }
+
+  const known = tryInferCwdForSession(sessionId);
+  if (known) return known;
+
+  if (cwd) {
+    sessionCwd.set(sessionId, cwd);
+    return cwd;
+  }
+
+  throw new Error(
+    'Missing required input: `cwd` could not be inferred for this `session_id`. Pass `cwd` once (repo root) to bind it.'
+  );
 }
 
 function toolResponsibility(toolName: string): string {
@@ -167,10 +238,11 @@ async function runCodexOnce({
     ROLE_CARD_ENABLED && (!sessionId || !roleCardSent.has(sessionId));
   if (includeRoleCard && sessionId) roleCardSent.add(sessionId);
 
+  const effectiveCwd = resolveCwdForCall(sessionId, cwd);
   const effectivePrompt = injectMcpHeader(toolName, prompt, includeRoleCard);
   const args = buildCodexArgs({
     sessionId,
-    cwd: cwd ?? WORKSPACE_ROOT,
+    cwd: effectiveCwd,
     prompt: effectivePrompt,
     model,
     reasoningEffort
@@ -253,6 +325,7 @@ async function runCodexOnce({
   if (agentMessages.length === 0) throw new Error('No agent_message received from Codex.');
 
   if (includeRoleCard) roleCardSent.add(threadId);
+  sessionCwd.set(threadId, effectiveCwd);
   tryRegisterInCodexHistory(threadId, historyLabel(toolName, prompt));
 
   return {
@@ -302,7 +375,7 @@ server.registerTool(
         .string()
         .min(1)
         .optional()
-        .describe('Optional working root passed to Codex (-C). Defaults to server startup directory.'),
+        .describe('Working root passed to Codex (-C). Required for new sessions; optional when resuming via session_id.'),
       model: z.string().optional().describe('Optional Codex model override.'),
       reasoning_effort: z
         .string()
@@ -356,7 +429,7 @@ server.registerTool(
         .string()
         .min(1)
         .optional()
-        .describe('Optional working root passed to Codex (-C). Defaults to server startup directory.'),
+        .describe('Working root passed to Codex (-C). Required for new sessions; optional when resuming via session_id.'),
       model: z.string().optional().describe('Optional Codex model override.'),
       reasoning_effort: z
         .string()
@@ -424,7 +497,7 @@ server.registerTool(
         .string()
         .min(1)
         .optional()
-        .describe('Optional working root passed to Codex (-C). Defaults to server startup directory.'),
+        .describe('Working root passed to Codex (-C). Required for new sessions; optional when resuming via session_id.'),
       model: z.string().optional().describe('Optional Codex model override.'),
       reasoning_effort: z
         .string()
@@ -490,7 +563,7 @@ server.registerTool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`codex-persistent-mcp running (cwd: ${WORKSPACE_ROOT})`);
+  console.error(`codex-persistent-mcp running (cwd: ${SERVER_CWD})`);
 }
 
 main().catch((error) => {

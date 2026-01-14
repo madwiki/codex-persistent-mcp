@@ -10,7 +10,7 @@
 
 ```bash
 claude mcp add-json --scope user codex-persistent \
-  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex"}}'
 ```
 
 验证：
@@ -23,7 +23,7 @@ claude mcp get codex-persistent
 ### Codex CLI
 
 ```bash
-codex mcp add codex-persistent --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project -- npx -y codex-persistent-mcp
+codex mcp add codex-persistent --env CODEX_BIN=/absolute/path/to/codex -- npx -y codex-persistent-mcp
 ```
 
 验证：
@@ -38,7 +38,7 @@ codex mcp get codex-persistent --json
 Antigravity 支持用 `--add-mcp` 添加 MCP server：
 
 ```bash
-antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+antigravity --add-mcp '{"name":"codex-persistent","command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex"}}'
 ```
 
 ## 解决的问题
@@ -106,10 +106,14 @@ npm start
 ## 环境变量
 
 - `CODEX_BIN`：`codex` 可执行文件路径（默认 `codex`）
-- `CODEX_MCP_CWD`：传给 `codex -C` 的工作目录（默认 MCP server 的 `process.cwd()`）
 - `CODEX_PERSISTENT_MCP_ORIGIN`：注入到每次请求里的标识（默认 `codex-persistent-mcp`）
 
-如果 tool 输入里传了 `cwd`，该请求会优先使用它（覆盖 `CODEX_MCP_CWD`）。
+## 工作目录（`cwd`）
+
+Codex 会在 session 元数据里记录工作目录，并且 `codex resume` 默认会按工作目录过滤会话列表。
+
+- 新建会话（不传 `session_id`）时：必须传 `cwd`（项目根目录）。
+- 续写会话（传 `session_id`）时：`cwd` 可省略，server 会复用或从 Codex 本地 session store 推断。
 
 ## “AI vs 人” 标记
 
@@ -136,14 +140,14 @@ Claude Code 提供 `claude mcp ...` 管理命令。
 
 ```bash
 claude mcp add-json --scope user codex-persistent \
-  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+  '{"command":"npx","args":["-y","codex-persistent-mcp"],"env":{"CODEX_BIN":"/absolute/path/to/codex"}}'
 ```
 
 如果你想固定版本（可复现）：
 
 ```bash
 claude mcp add-json --scope user codex-persistent \
-  '{"command":"npx","args":["-y","codex-persistent-mcp@0.1.2"],"env":{"CODEX_BIN":"/absolute/path/to/codex","CODEX_MCP_CWD":"/absolute/path/to/your/project"}}'
+  '{"command":"npx","args":["-y","codex-persistent-mcp@0.1.2"],"env":{"CODEX_BIN":"/absolute/path/to/codex"}}'
 ```
 
 验证：
@@ -166,19 +170,19 @@ npm run build
 2) 添加为 stdio MCP server：
 
 ```bash
-codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
+codex mcp add --env CODEX_BIN=/absolute/path/to/codex codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
 ```
 
 如果已全局安装：
 
 ```bash
-codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
+codex mcp add --env CODEX_BIN=/absolute/path/to/codex codex-persistent -- codex-persistent-mcp
 ```
 
 如果已发布到 npm（无需 clone）：
 
 ```bash
-codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
+codex mcp add --env CODEX_BIN=/absolute/path/to/codex codex-persistent -- npx -y codex-persistent-mcp
 ```
 
 验证：
@@ -212,9 +216,9 @@ npx -y codex-persistent-mcp@0.1.3
 
 - 配置时显式设置 `CODEX_BIN=/absolute/path/to/codex`（用 `which codex` 找路径）
 
-### `CODEX_MCP_CWD` 填什么？
+### 为什么要传 `cwd`？
 
-建议填你的项目根目录，让 Codex 看到正确的工作区上下文。
+传入项目根目录可以让 Codex 记录正确的工作区上下文，并让 `codex resume` 在该项目目录下默认就能看到该会话。
 
 ### npm 发布需要 2FA（维护者）
 
