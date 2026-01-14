@@ -21,6 +21,7 @@ const REGISTER_IN_CODEX_HISTORY =
 
 type CodexArgsInput = {
   sessionId?: string;
+  cwd: string;
   prompt: string;
   model?: string;
   reasoningEffort?: string;
@@ -121,13 +122,13 @@ function tomlString(value: string): string {
   return `"${escaped}"`;
 }
 
-function buildCodexArgs({ sessionId, prompt, model, reasoningEffort }: CodexArgsInput): string[] {
+function buildCodexArgs({ sessionId, cwd, prompt, model, reasoningEffort }: CodexArgsInput): string[] {
   const base = [
     'exec',
     '--skip-git-repo-check',
     '--json',
     '-C',
-    WORKSPACE_ROOT
+    cwd
   ];
 
   if (model) base.push('-m', model);
@@ -140,6 +141,7 @@ function buildCodexArgs({ sessionId, prompt, model, reasoningEffort }: CodexArgs
 type CodexRunInput = {
   sessionId?: string;
   toolName: string;
+  cwd?: string;
   prompt: string;
   model?: string;
   reasoningEffort?: string;
@@ -155,6 +157,7 @@ type CodexRunResult = {
 async function runCodexOnce({
   sessionId,
   toolName,
+  cwd,
   prompt,
   model,
   reasoningEffort,
@@ -165,7 +168,13 @@ async function runCodexOnce({
   if (includeRoleCard && sessionId) roleCardSent.add(sessionId);
 
   const effectivePrompt = injectMcpHeader(toolName, prompt, includeRoleCard);
-  const args = buildCodexArgs({ sessionId, prompt: effectivePrompt, model, reasoningEffort });
+  const args = buildCodexArgs({
+    sessionId,
+    cwd: cwd ?? WORKSPACE_ROOT,
+    prompt: effectivePrompt,
+    model,
+    reasoningEffort
+  });
 
   const child = spawn(CODEX_BIN, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -289,6 +298,11 @@ server.registerTool(
     inputSchema: {
       session_id: z.string().uuid().optional().describe('Existing Codex session id (UUID).'),
       prompt: z.string().min(1).describe('User message to send to Codex.'),
+      cwd: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional working root passed to Codex (-C). Defaults to server startup directory.'),
       model: z.string().optional().describe('Optional Codex model override.'),
       reasoning_effort: z
         .string()
@@ -304,11 +318,12 @@ server.registerTool(
       usage: z.any().optional()
     }
   },
-  async ({ session_id, prompt, model, reasoning_effort, timeout_ms }) => {
+  async ({ session_id, prompt, cwd, model, reasoning_effort, timeout_ms }) => {
     const result = await enqueueBySession(session_id, () =>
       runCodexOnce({
         sessionId: session_id,
         toolName: 'codex_chat',
+        cwd,
         prompt,
         model,
         reasoningEffort: reasoning_effort,
@@ -337,6 +352,11 @@ server.registerTool(
       requirements: z.string().min(1).describe('User requirements / acceptance criteria.'),
       plan: z.string().min(1).describe('Proposed plan to critique.'),
       constraints: z.string().optional().describe('Optional constraints (tech, time, safety).'),
+      cwd: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional working root passed to Codex (-C). Defaults to server startup directory.'),
       model: z.string().optional().describe('Optional Codex model override.'),
       reasoning_effort: z
         .string()
@@ -352,7 +372,7 @@ server.registerTool(
       usage: z.any().optional()
     }
   },
-  async ({ session_id, requirements, plan, constraints, model, reasoning_effort, timeout_ms }) => {
+  async ({ session_id, requirements, plan, constraints, cwd, model, reasoning_effort, timeout_ms }) => {
     const prompt = [
       'Reply in Chinese.',
       '## Requirements',
@@ -369,6 +389,7 @@ server.registerTool(
       runCodexOnce({
         sessionId: session_id,
         toolName: 'codex_guard_plan',
+        cwd,
         prompt,
         model,
         reasoningEffort: reasoning_effort,
@@ -399,6 +420,11 @@ server.registerTool(
       change_summary: z.string().min(1).describe('What changed and why.'),
       test_results: z.string().optional().describe('Test results or commands run.'),
       open_questions: z.string().optional().describe('Anything uncertain that needs a decision.'),
+      cwd: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional working root passed to Codex (-C). Defaults to server startup directory.'),
       model: z.string().optional().describe('Optional Codex model override.'),
       reasoning_effort: z
         .string()
@@ -419,6 +445,7 @@ server.registerTool(
     change_summary,
     test_results,
     open_questions,
+    cwd,
     model,
     reasoning_effort,
     timeout_ms
@@ -438,6 +465,7 @@ server.registerTool(
       runCodexOnce({
         sessionId: session_id,
         toolName: 'codex_guard_final',
+        cwd,
         prompt,
         model,
         reasoningEffort: reasoning_effort,
