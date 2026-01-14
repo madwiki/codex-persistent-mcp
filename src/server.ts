@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as z from 'zod/v4';
@@ -8,6 +9,7 @@ const WORKSPACE_ROOT = process.env.CODEX_MCP_CWD ?? process.cwd();
 const CODEX_BIN = process.env.CODEX_BIN ?? 'codex';
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MCP_ORIGIN = process.env.CODEX_PERSISTENT_MCP_ORIGIN ?? 'codex-persistent-mcp';
+const ROLE_CARD_ENABLED = (process.env.CODEX_PERSISTENT_MCP_ROLE_CARD ?? '1') !== '0';
 
 type CodexArgsInput = {
   sessionId?: string;
@@ -16,18 +18,46 @@ type CodexArgsInput = {
   reasoningEffort?: string;
 };
 
-function injectMcpHeader(toolName: string, userText: string): string {
+const roleCardSent = new Set<string>();
+
+function roleCardText(): string {
+  return [
+    '<<<ROLE_CARD_BEGIN>>>',
+    'This session may include messages from a human user (via `codex resume`) and from an AI agent (via MCP).',
+    'If the message includes an `<<<MCP_CONTEXT_BEGIN>>>` block, you are advising the calling AI agent (not the end user).',
+    'If you need user input, list the minimum questions for the agent to ask the user (do not ask the user directly).',
+    'If the message has no MCP context block, treat it as coming from the human user.',
+    'Keep responses concise and practical; avoid endless critique loops.',
+    '<<<ROLE_CARD_END>>>'
+  ].join('\n');
+}
+
+function toolResponsibility(toolName: string): string {
+  switch (toolName) {
+    case 'codex_chat':
+      return 'You are advising the calling AI agent (not the end user). If you need user input, list the minimum questions for the agent to ask the user (do not ask the user directly). If you disagree or suspect a misunderstanding, state it and name the differing assumption.';
+    case 'codex_guard_plan':
+      return 'Review a proposed plan for missing requirements, risks, unclear questions, and suggested tests. If you suspect misunderstanding, call it out and propose the minimum clarifying questions for the agent to ask the user.';
+    case 'codex_guard_final':
+      return 'Review final change summary for correctness, regressions, missing coverage, and rollback concerns. Distinguish blockers vs suggestions and keep feedback concise. If you need user input, list the minimum questions for the agent to ask the user.';
+    default:
+      return 'Handle the request appropriately.';
+  }
+}
+
+function injectMcpHeader(toolName: string, userText: string, includeRoleCard: boolean): string {
   const headerLines = [
-    '[MCP]',
+    '<<<MCP_CONTEXT_BEGIN>>>',
     `origin=${MCP_ORIGIN}`,
     `tool=${toolName}`,
+    'audience=ai_agent',
+    `responsibility=${toolResponsibility(toolName)}`,
     'sender=ai_agent',
-    'human_sender=false',
-    `timestamp=${new Date().toISOString()}`,
-    '',
-    'Note: This message was sent via MCP by an AI agent (not a human).'
+    '<<<MCP_CONTEXT_END>>>'
   ];
-  return `${headerLines.join('\n')}\n\n${userText}`;
+  const prefix = headerLines.join('\n');
+  if (!includeRoleCard) return `${prefix}\n\n${userText}`;
+  return `${prefix}\n\n${roleCardText()}\n\n${userText}`;
 }
 
 function tomlString(value: string): string {
@@ -74,7 +104,11 @@ async function runCodexOnce({
   reasoningEffort,
   timeoutMs = DEFAULT_TIMEOUT_MS
 }: CodexRunInput): Promise<CodexRunResult> {
-  const effectivePrompt = injectMcpHeader(toolName, prompt);
+  const includeRoleCard =
+    ROLE_CARD_ENABLED && (!sessionId || !roleCardSent.has(sessionId));
+  if (includeRoleCard && sessionId) roleCardSent.add(sessionId);
+
+  const effectivePrompt = injectMcpHeader(toolName, prompt, includeRoleCard);
   const args = buildCodexArgs({ sessionId, prompt: effectivePrompt, model, reasoningEffort });
 
   const child = spawn(CODEX_BIN, args, {
@@ -153,6 +187,8 @@ async function runCodexOnce({
   if (!threadId) throw new Error('Failed to detect Codex thread_id from JSONL output.');
   if (agentMessages.length === 0) throw new Error('No agent_message received from Codex.');
 
+  if (includeRoleCard) roleCardSent.add(threadId);
+
   return {
     sessionId: threadId,
     reply: agentMessages[agentMessages.length - 1],
@@ -177,7 +213,15 @@ function enqueueBySession<T>(sessionId: string | undefined, task: () => Promise<
 
 const server = new McpServer({
   name: 'codex-persistent-mcp',
-  version: '0.1.0'
+  version: (() => {
+    try {
+      const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+      const parsed = JSON.parse(raw) as { version?: unknown };
+      return typeof parsed.version === 'string' ? parsed.version : '0.0.0';
+    } catch {
+      return '0.0.0';
+    }
+  })()
 });
 
 server.registerTool(
@@ -253,15 +297,7 @@ server.registerTool(
   },
   async ({ session_id, requirements, plan, constraints, model, reasoning_effort, timeout_ms }) => {
     const prompt = [
-      'You are Codex acting as a strict senior engineering reviewer.',
-      'Respond in Chinese.',
-      '',
-      'Please critique the proposed plan. Focus on:',
-      '1) Missing requirements and edge cases',
-      '2) Risks / failure modes (including memory/compact pitfalls)',
-      '3) Questions to clarify before implementation',
-      '4) Suggested test plan and validation steps',
-      '',
+      'Reply in Chinese.',
       '## Requirements',
       requirements.trim(),
       '',
@@ -331,15 +367,7 @@ server.registerTool(
     timeout_ms
   }) => {
     const prompt = [
-      'You are Codex acting as a strict senior engineering reviewer.',
-      'Respond in Chinese.',
-      '',
-      'Review the final state of work. Focus on:',
-      '1) Whether the changes satisfy the stated goal',
-      '2) Likely regressions / edge cases',
-      '3) Missing tests or validation steps',
-      '4) Release / rollback considerations',
-      '',
+      'Reply in Chinese.',
       '## Change summary',
       change_summary.trim(),
       '',
