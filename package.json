@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
-    "start": "node dist/server.js"
+    "start": "npm run build && node dist/server.js"
   },
   "keywords": [
     "mcp",
