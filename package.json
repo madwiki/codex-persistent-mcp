@@ -1,6 +1,6 @@
 {
   "name": "codex-persistent-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An MCP (stdio) server that proxies Codex CLI sessions with real persistence via `codex resume`.",
   "main": "dist/server.js",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
     "prepack": "npm run build",
     "start": "npm run build && node dist/server.js"
   },
