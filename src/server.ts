@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as z from 'zod/v4';
@@ -10,6 +12,12 @@ const CODEX_BIN = process.env.CODEX_BIN ?? 'codex';
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MCP_ORIGIN = process.env.CODEX_PERSISTENT_MCP_ORIGIN ?? 'codex-persistent-mcp';
 const ROLE_CARD_ENABLED = (process.env.CODEX_PERSISTENT_MCP_ROLE_CARD ?? '1') !== '0';
+const CODEX_HOME = process.env.CODEX_HOME ?? join(homedir(), '.codex');
+const CODEX_HISTORY_PATH =
+  process.env.CODEX_PERSISTENT_MCP_CODEX_HISTORY_PATH ??
+  join(CODEX_HOME, 'history.jsonl');
+const REGISTER_IN_CODEX_HISTORY =
+  (process.env.CODEX_PERSISTENT_MCP_REGISTER_IN_CODEX_HISTORY ?? '1') !== '0';
 
 type CodexArgsInput = {
   sessionId?: string;
@@ -19,6 +27,7 @@ type CodexArgsInput = {
 };
 
 const roleCardSent = new Set<string>();
+const historyRecorded = new Set<string>();
 
 function roleCardText(): string {
   return [
@@ -30,6 +39,53 @@ function roleCardText(): string {
     'Keep responses concise and practical; avoid endless critique loops.',
     '<<<ROLE_CARD_END>>>'
   ].join('\n');
+}
+
+function historyLabel(toolName: string, prompt: string): string {
+  const normalized = prompt.replace(/\s+/g, ' ').trim();
+  const prefix =
+    toolName === 'codex_chat'
+      ? 'MCP chat'
+      : toolName === 'codex_guard_plan'
+        ? 'MCP plan guard'
+        : toolName === 'codex_guard_final'
+          ? 'MCP final guard'
+          : `MCP ${toolName}`;
+  const excerpt = normalized.slice(0, 140);
+  return excerpt ? `${prefix}: ${excerpt}` : prefix;
+}
+
+function tryRegisterInCodexHistory(sessionId: string, text: string): void {
+  if (!REGISTER_IN_CODEX_HISTORY) return;
+  if (historyRecorded.has(sessionId)) return;
+
+  try {
+    const historyDir = dirname(CODEX_HISTORY_PATH);
+    mkdirSync(historyDir, { recursive: true });
+
+    try {
+      const size = statSync(CODEX_HISTORY_PATH).size;
+      if (size <= 5_000_000) {
+        const existing = readFileSync(CODEX_HISTORY_PATH, 'utf8');
+        if (existing.includes(sessionId)) {
+          historyRecorded.add(sessionId);
+          return;
+        }
+      }
+    } catch {
+      // Missing file is fine.
+    }
+
+    const entry = {
+      session_id: sessionId,
+      ts: Math.floor(Date.now() / 1000),
+      text
+    };
+    appendFileSync(CODEX_HISTORY_PATH, `${JSON.stringify(entry)}\n`, 'utf8');
+    historyRecorded.add(sessionId);
+  } catch {
+    // Best-effort only: avoid breaking MCP responses due to local history indexing.
+  }
 }
 
 function toolResponsibility(toolName: string): string {
@@ -188,6 +244,7 @@ async function runCodexOnce({
   if (agentMessages.length === 0) throw new Error('No agent_message received from Codex.');
 
   if (includeRoleCard) roleCardSent.add(threadId);
+  tryRegisterInCodexHistory(threadId, historyLabel(toolName, prompt));
 
   return {
     sessionId: threadId,
