@@ -22,6 +22,14 @@ npm install
 npm run build
 ```
 
+## 全局安装（可选）
+
+发布到 npm 之后，可以全局安装成 CLI：
+
+```bash
+npm install -g codex-persistent-mcp
+```
+
 ## 运行
 
 ```bash
@@ -79,6 +87,18 @@ npm run build
 claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
 ```
 
+如果已全局安装，也可以这样写：
+
+```bash
+claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
+```
+
+如果已发布到 npm，也可以不 clone 仓库直接用 `npx`：
+
+```bash
+claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
+```
+
 可选：加 `--scope user` 对所有项目生效：
 
 ```bash
@@ -108,6 +128,18 @@ npm run build
 codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
 ```
 
+如果已全局安装：
+
+```bash
+codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
+```
+
+如果已发布到 npm（无需 clone）：
+
+```bash
+codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
+```
+
 验证：
 
 ```bash
@@ -132,4 +164,3 @@ codex mcp get codex-persistent --json
 ### `CODEX_MCP_CWD` 填什么？
 
 建议填你的项目根目录，让 Codex 看到正确的工作区上下文。
-

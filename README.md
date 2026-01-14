@@ -22,6 +22,14 @@ npm install
 npm run build
 ```
 
+## Install globally (optional)
+
+After publishing to npm, you can install it as a global CLI:
+
+```bash
+npm install -g codex-persistent-mcp
+```
+
 ## Run
 
 ```bash
@@ -79,6 +87,18 @@ npm run build
 claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
 ```
 
+If installed globally, you can also use:
+
+```bash
+claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
+```
+
+If published to npm, you can use `npx` without cloning:
+
+```bash
+claude mcp add -e CODEX_BIN=/absolute/path/to/codex -e CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
+```
+
 Optional: use `--scope user` to enable for all projects:
 
 ```bash
@@ -108,6 +128,18 @@ npm run build
 codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- node /absolute/path/to/this/repo/dist/server.js
 ```
 
+If installed globally:
+
+```bash
+codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- codex-persistent-mcp
+```
+
+If published to npm (no clone):
+
+```bash
+codex mcp add --env CODEX_BIN=/absolute/path/to/codex --env CODEX_MCP_CWD=/absolute/path/to/your/project codex-persistent -- npx -y codex-persistent-mcp
+```
+
 Verify:
 
 ```bash
@@ -132,4 +164,3 @@ Common when PATH is not inherited (e.g. nvm). Fix by setting:
 ### What should `CODEX_MCP_CWD` be?
 
 Set it to your project root so Codex sees the right workspace context.
-
