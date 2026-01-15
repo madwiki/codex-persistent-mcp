@@ -47,6 +47,7 @@ function roleCardText(): string {
     'If the message includes an `<<<MCP_CONTEXT_BEGIN>>>` block, you are advising the calling AI agent (not the end user).',
     'If you need user input, list the minimum questions for the agent to ask the user (do not ask the user directly).',
     'If the message has no MCP context block, treat it as coming from the human user.',
+    'When replying to MCP messages, address the agent. Refer to the human as "the user" (not "you").',
     'Keep responses concise and practical; avoid endless critique loops.',
     '<<<ROLE_CARD_END>>>'
   ].join('\n');
@@ -314,6 +315,9 @@ function injectMcpHeader(toolName: string, userText: string, includeRoleCard: bo
     `origin=${MCP_ORIGIN}`,
     `tool=${toolName}`,
     'audience=ai_agent',
+    'routing=if_present_reply_to_ai_agent_else_reply_to_human_user',
+    'agent_label=agent',
+    'human_label=the user',
     `responsibility=${toolResponsibility(toolName)}`,
     'sender=ai_agent',
     '<<<MCP_CONTEXT_END>>>'

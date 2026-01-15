@@ -122,7 +122,10 @@ Codex stores session metadata including the workspace CWD, and `codex resume` fi
 
 Codex CLI does not automatically know that an input came from another AI via MCP.
 
-This server always injects a small header into every request so the Codex session can attribute messages as coming from an AI agent over MCP (not a human user).
+This server always injects a small header into every request so Codex can reliably distinguish:
+
+- Messages with `<<<MCP_CONTEXT_BEGIN>>>` → from an AI agent via MCP (reply to the agent)
+- Messages without it → from the human user (e.g. `codex resume`)
 
 ## Per-request model + reasoning overrides
 

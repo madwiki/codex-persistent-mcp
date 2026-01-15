@@ -122,7 +122,10 @@ Codex 会在 session 元数据里记录工作目录，并且 `codex resume` 默�
 
 Codex CLI 默认并不知道输入是来自 MCP 的其他 AI 还是用户本人。
 
-本 server 会在每次请求前自动注入一个 header，让 Codex 会话可以将消息标记为 “AI agent via MCP（非用户本人）”。
+本 server 会在每次请求前自动注入一个 header，让 Codex 能稳定区分：
+
+- 带 `<<<MCP_CONTEXT_BEGIN>>>` 的消息：来自 AI agent via MCP（回复给 agent）
+- 不带该标识的消息：来自用户本人（例如手动 `codex resume`）
 
 ## 每次调用的 model + reasoning 覆盖
 
