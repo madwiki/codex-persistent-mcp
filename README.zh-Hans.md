@@ -76,17 +76,19 @@ npm start
 
 ## MCP 工具
 
-本 server 暴露 3 个工具（都会返回 `session_id` 与 `resume_command`）：
+本 server 暴露 3 个主要工具（都会返回 `session_id` 与 `resume_command`）：
 
 - `codex_chat`
   - 输入：`session_id?`（UUID）、`prompt`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 输出：`session_id`、`reply`、`resume_command`（例如 `codex resume <session_id>`）、`usage?`
-- `codex_guard_plan`
+- `codex_plan`
   - 输入：`session_id?`、`requirements`、`plan`、`constraints?`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 输出：`session_id`、`critique`、`resume_command`、`usage?`
-- `codex_guard_final`
+- `codex_review`
   - 输入：`session_id?`、`change_summary`、`test_results?`、`open_questions?`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
   - 输出：`session_id`、`review`、`resume_command`、`usage?`
+
+为了兼容旧版本，仍保留 `codex_guard_plan` 与 `codex_guard_final`。
 
 ## 工作原理（为什么能 `codex resume`）
 
@@ -205,8 +207,8 @@ npx -y codex-persistent-mcp@0.1.3
 
 ## 推荐用法（双 Agent 把关）
 
-- plan 前：把“需求 + 计划草稿”发给 `codex_guard_plan`，获取漏项/风险/追问/测试建议。
-- 收尾前：把“变更摘要 + 测试结果 + 未决问题”发给 `codex_guard_final`，做最终把关。
+- plan 前：把“需求 + 计划草稿”发给 `codex_plan`，获取漏项/风险/追问/测试建议。
+- 收尾前：把“变更摘要 + 测试结果 + 未决问题”发给 `codex_review`，做最终把关。
 - 任意时刻：直接 `codex resume <session_id>` 手动接力继续聊。
 
 ## 常见问题

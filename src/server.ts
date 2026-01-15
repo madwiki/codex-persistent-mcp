@@ -52,15 +52,64 @@ function roleCardText(): string {
   ].join('\n');
 }
 
+type RepoSessionFile = {
+  session_id?: unknown;
+  updated_at?: unknown;
+  summary?: unknown;
+};
+
+function tryReadRepoSessionId(cwd: string): string | undefined {
+  try {
+    const path = join(cwd, '.claude', 'codex_session.json');
+    const raw = readFileSync(path, 'utf8');
+    const parsed = JSON.parse(raw) as RepoSessionFile;
+    const sessionId = parsed?.session_id;
+    return typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tryWriteRepoSessionId(cwd: string, sessionId: string): void {
+  try {
+    const dir = join(cwd, '.claude');
+    const path = join(dir, 'codex_session.json');
+    mkdirSync(dir, { recursive: true });
+
+    let existing: Record<string, unknown> | undefined;
+    try {
+      const raw = readFileSync(path, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        existing = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Missing/invalid file is fine.
+    }
+
+    const next = {
+      ...(existing ?? {}),
+      session_id: sessionId,
+      updated_at: new Date().toISOString()
+    };
+
+    const tmpPath = `${path}.tmp.${process.pid}.${Date.now()}`;
+    writeFileSync(tmpPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+    renameSync(tmpPath, path);
+  } catch {
+    // Best-effort only: avoid breaking MCP responses due to local file writes.
+  }
+}
+
 function historyLabel(toolName: string, prompt: string): string {
   const normalized = prompt.replace(/\s+/g, ' ').trim();
   const prefix =
     toolName === 'codex_chat'
       ? 'MCP chat'
-      : toolName === 'codex_guard_plan'
-        ? 'MCP plan guard'
-        : toolName === 'codex_guard_final'
-          ? 'MCP final guard'
+      : toolName === 'codex_plan' || toolName === 'codex_guard_plan'
+        ? 'MCP plan'
+        : toolName === 'codex_review' || toolName === 'codex_guard_final'
+          ? 'MCP review'
           : `MCP ${toolName}`;
   const excerpt = normalized.slice(0, 140);
   return excerpt ? `${prefix}: ${excerpt}` : prefix;
@@ -248,8 +297,10 @@ function toolResponsibility(toolName: string): string {
   switch (toolName) {
     case 'codex_chat':
       return 'You are advising the calling AI agent (not the end user). If you need user input, list the minimum questions for the agent to ask the user (do not ask the user directly). If you disagree or suspect a misunderstanding, state it and name the differing assumption.';
+    case 'codex_plan':
     case 'codex_guard_plan':
       return 'Review a proposed plan for missing requirements, risks, unclear questions, and suggested tests. If you suspect misunderstanding, call it out and propose the minimum clarifying questions for the agent to ask the user.';
+    case 'codex_review':
     case 'codex_guard_final':
       return 'Review final change summary for correctness, regressions, missing coverage, and rollback concerns. Distinguish blockers vs suggestions and keep feedback concise. If you need user input, list the minimum questions for the agent to ask the user.';
     default:
@@ -412,6 +463,7 @@ async function runCodexOnce({
   sessionCwd.set(threadId, effectiveCwd);
   tryRegisterInCodexHistory(threadId, historyLabel(toolName, prompt));
   tryPromoteExecSessionToCli(threadId);
+  tryWriteRepoSessionId(effectiveCwd, threadId);
 
   return {
     sessionId: threadId,
@@ -477,9 +529,10 @@ server.registerTool(
     }
   },
   async ({ session_id, prompt, cwd, model, reasoning_effort, timeout_ms }) => {
-    const result = await enqueueBySession(session_id, () =>
+    const effectiveSessionId = session_id ?? (cwd ? tryReadRepoSessionId(cwd) : undefined);
+    const result = await enqueueBySession(effectiveSessionId, () =>
       runCodexOnce({
-        sessionId: session_id,
+        sessionId: effectiveSessionId,
         toolName: 'codex_chat',
         cwd,
         prompt,
@@ -531,6 +584,7 @@ server.registerTool(
     }
   },
   async ({ session_id, requirements, plan, constraints, cwd, model, reasoning_effort, timeout_ms }) => {
+    const effectiveSessionId = session_id ?? (cwd ? tryReadRepoSessionId(cwd) : undefined);
     const prompt = [
       'Reply in Chinese.',
       '## Requirements',
@@ -543,10 +597,79 @@ server.registerTool(
       .filter(Boolean)
       .join('\n');
 
-    const result = await enqueueBySession(session_id, () =>
+    const result = await enqueueBySession(effectiveSessionId, () =>
       runCodexOnce({
-        sessionId: session_id,
+        sessionId: effectiveSessionId,
         toolName: 'codex_guard_plan',
+        cwd,
+        prompt,
+        model,
+        reasoningEffort: reasoning_effort,
+        timeoutMs: timeout_ms
+      })
+    );
+
+    const structuredContent = {
+      session_id: result.sessionId,
+      critique: result.reply,
+      resume_command: `codex resume ${result.sessionId}`,
+      usage: result.usage
+    };
+
+    return {
+      content: [{ type: 'text', text: result.reply }],
+      structuredContent
+    };
+  }
+);
+
+server.registerTool(
+  'codex_plan',
+  {
+    description: 'Ask Codex to review a proposed plan (missing items, risks, questions, tests).',
+    inputSchema: {
+      session_id: z.string().uuid().optional().describe('Optional Codex session id (UUID).'),
+      requirements: z.string().min(1).describe('User requirements / acceptance criteria.'),
+      plan: z.string().min(1).describe('Proposed plan to review.'),
+      constraints: z.string().optional().describe('Optional constraints (tech, time, safety).'),
+      cwd: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Working root passed to Codex (-C). Required for new sessions; optional when resuming via session_id.'),
+      model: z.string().optional().describe('Optional Codex model override.'),
+      reasoning_effort: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional per-request override for model_reasoning_effort (e.g. low, medium, high).'),
+      timeout_ms: z.number().int().min(1_000).max(600_000).optional().describe('Execution timeout.')
+    },
+    outputSchema: {
+      session_id: z.string().uuid(),
+      critique: z.string(),
+      resume_command: z.string(),
+      usage: z.any().optional()
+    }
+  },
+  async ({ session_id, requirements, plan, constraints, cwd, model, reasoning_effort, timeout_ms }) => {
+    const effectiveSessionId = session_id ?? (cwd ? tryReadRepoSessionId(cwd) : undefined);
+    const prompt = [
+      'Reply in Chinese.',
+      '## Requirements',
+      requirements.trim(),
+      '',
+      constraints ? `## Constraints\n${constraints.trim()}\n` : '',
+      '## Proposed plan',
+      plan.trim()
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const result = await enqueueBySession(effectiveSessionId, () =>
+      runCodexOnce({
+        sessionId: effectiveSessionId,
+        toolName: 'codex_plan',
         cwd,
         prompt,
         model,
@@ -608,6 +731,7 @@ server.registerTool(
     reasoning_effort,
     timeout_ms
   }) => {
+    const effectiveSessionId = session_id ?? (cwd ? tryReadRepoSessionId(cwd) : undefined);
     const prompt = [
       'Reply in Chinese.',
       '## Change summary',
@@ -619,10 +743,87 @@ server.registerTool(
       .filter(Boolean)
       .join('\n');
 
-    const result = await enqueueBySession(session_id, () =>
+    const result = await enqueueBySession(effectiveSessionId, () =>
       runCodexOnce({
-        sessionId: session_id,
+        sessionId: effectiveSessionId,
         toolName: 'codex_guard_final',
+        cwd,
+        prompt,
+        model,
+        reasoningEffort: reasoning_effort,
+        timeoutMs: timeout_ms
+      })
+    );
+
+    const structuredContent = {
+      session_id: result.sessionId,
+      review: result.reply,
+      resume_command: `codex resume ${result.sessionId}`,
+      usage: result.usage
+    };
+
+    return {
+      content: [{ type: 'text', text: result.reply }],
+      structuredContent
+    };
+  }
+);
+
+server.registerTool(
+  'codex_review',
+  {
+    description: 'Ask Codex to review final changes (correctness, regressions, missing coverage).',
+    inputSchema: {
+      session_id: z.string().uuid().optional().describe('Optional Codex session id (UUID).'),
+      change_summary: z.string().min(1).describe('What changed and why.'),
+      test_results: z.string().optional().describe('Test results or commands run.'),
+      open_questions: z.string().optional().describe('Anything uncertain that needs a decision.'),
+      cwd: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Working root passed to Codex (-C). Required for new sessions; optional when resuming via session_id.'),
+      model: z.string().optional().describe('Optional Codex model override.'),
+      reasoning_effort: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Optional per-request override for model_reasoning_effort (e.g. low, medium, high).'),
+      timeout_ms: z.number().int().min(1_000).max(600_000).optional().describe('Execution timeout.')
+    },
+    outputSchema: {
+      session_id: z.string().uuid(),
+      review: z.string(),
+      resume_command: z.string(),
+      usage: z.any().optional()
+    }
+  },
+  async ({
+    session_id,
+    change_summary,
+    test_results,
+    open_questions,
+    cwd,
+    model,
+    reasoning_effort,
+    timeout_ms
+  }) => {
+    const effectiveSessionId = session_id ?? (cwd ? tryReadRepoSessionId(cwd) : undefined);
+    const prompt = [
+      'Reply in Chinese.',
+      '## Change summary',
+      change_summary.trim(),
+      '',
+      test_results ? `## Test results\n${test_results.trim()}\n` : '',
+      open_questions ? `## Open questions\n${open_questions.trim()}\n` : ''
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const result = await enqueueBySession(effectiveSessionId, () =>
+      runCodexOnce({
+        sessionId: effectiveSessionId,
+        toolName: 'codex_review',
         cwd,
         prompt,
         model,

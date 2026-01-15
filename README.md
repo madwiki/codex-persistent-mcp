@@ -76,17 +76,19 @@ npm start
 
 ## Tools
 
-This server exposes 3 tools (all return `session_id` and `resume_command`):
+This server exposes 3 primary tools (all return `session_id` and `resume_command`):
 
 - `codex_chat`
   - input: `session_id?` (UUID), `prompt`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `reply`, `resume_command` (e.g. `codex resume <session_id>`), `usage?`
-- `codex_guard_plan`
+- `codex_plan`
   - input: `session_id?`, `requirements`, `plan`, `constraints?`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `critique`, `resume_command`, `usage?`
-- `codex_guard_final`
+- `codex_review`
   - input: `session_id?`, `change_summary`, `test_results?`, `open_questions?`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
   - output: `session_id`, `review`, `resume_command`, `usage?`
+
+Backward-compatible tool names are still available: `codex_guard_plan` and `codex_guard_final`.
 
 ## How it works (why `codex resume` works)
 
@@ -145,8 +147,8 @@ npx -y codex-persistent-mcp@0.1.3
 
 ## Suggested workflow (two-agent guardrail)
 
-- Before planning: send “requirements + draft plan” to `codex_guard_plan` to get gaps/risks/questions/tests.
-- Before finishing: send “change summary + test results + open questions” to `codex_guard_final` for a final review.
+- Before planning: send “requirements + draft plan” to `codex_plan` to get gaps/risks/questions/tests.
+- Before finishing: send “change summary + test results + open questions” to `codex_review` for a final review.
 - At any time: use `codex resume <session_id>` to continue the same session manually.
 
 ## Troubleshooting
