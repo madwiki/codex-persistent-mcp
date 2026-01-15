@@ -524,7 +524,6 @@ server.registerTool(
     outputSchema: {
       session_id: z.string().uuid(),
       reply: z.string(),
-      resume_command: z.string(),
       usage: z.any().optional()
     }
   },
@@ -544,7 +543,6 @@ server.registerTool(
     const structuredContent = {
       session_id: result.sessionId,
       reply: result.reply,
-      resume_command: `codex resume ${result.sessionId}`,
       usage: result.usage
     };
     return {
@@ -579,7 +577,6 @@ server.registerTool(
     outputSchema: {
       session_id: z.string().uuid(),
       critique: z.string(),
-      resume_command: z.string(),
       usage: z.any().optional()
     }
   },
@@ -612,7 +609,6 @@ server.registerTool(
     const structuredContent = {
       session_id: result.sessionId,
       critique: result.reply,
-      resume_command: `codex resume ${result.sessionId}`,
       usage: result.usage
     };
 
@@ -648,7 +644,6 @@ server.registerTool(
     outputSchema: {
       session_id: z.string().uuid(),
       critique: z.string(),
-      resume_command: z.string(),
       usage: z.any().optional()
     }
   },
@@ -681,7 +676,6 @@ server.registerTool(
     const structuredContent = {
       session_id: result.sessionId,
       critique: result.reply,
-      resume_command: `codex resume ${result.sessionId}`,
       usage: result.usage
     };
 
@@ -717,7 +711,6 @@ server.registerTool(
     outputSchema: {
       session_id: z.string().uuid(),
       review: z.string(),
-      resume_command: z.string(),
       usage: z.any().optional()
     }
   },
@@ -758,7 +751,6 @@ server.registerTool(
     const structuredContent = {
       session_id: result.sessionId,
       review: result.reply,
-      resume_command: `codex resume ${result.sessionId}`,
       usage: result.usage
     };
 
@@ -794,7 +786,6 @@ server.registerTool(
     outputSchema: {
       session_id: z.string().uuid(),
       review: z.string(),
-      resume_command: z.string(),
       usage: z.any().optional()
     }
   },
@@ -835,7 +826,6 @@ server.registerTool(
     const structuredContent = {
       session_id: result.sessionId,
       review: result.reply,
-      resume_command: `codex resume ${result.sessionId}`,
       usage: result.usage
     };
 

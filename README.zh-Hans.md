@@ -76,17 +76,17 @@ npm start
 
 ## MCP 工具
 
-本 server 暴露 3 个主要工具（都会返回 `session_id` 与 `resume_command`）：
+本 server 暴露 3 个主要工具（都会返回 `session_id`）：
 
 - `codex_chat`
   - 输入：`session_id?`（UUID）、`prompt`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
-  - 输出：`session_id`、`reply`、`resume_command`（例如 `codex resume <session_id>`）、`usage?`
+  - 输出：`session_id`、`reply`、`usage?`
 - `codex_plan`
   - 输入：`session_id?`、`requirements`、`plan`、`constraints?`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
-  - 输出：`session_id`、`critique`、`resume_command`、`usage?`
+  - 输出：`session_id`、`critique`、`usage?`
 - `codex_review`
   - 输入：`session_id?`、`change_summary`、`test_results?`、`open_questions?`、`cwd?`、`model?`、`reasoning_effort?`、`timeout_ms?`
-  - 输出：`session_id`、`review`、`resume_command`、`usage?`
+  - 输出：`session_id`、`review`、`usage?`
 
 为了兼容旧版本，仍保留 `codex_guard_plan` 与 `codex_guard_final`。
 

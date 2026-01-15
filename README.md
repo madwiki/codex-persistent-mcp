@@ -76,17 +76,17 @@ npm start
 
 ## Tools
 
-This server exposes 3 primary tools (all return `session_id` and `resume_command`):
+This server exposes 3 primary tools (all return `session_id`):
 
 - `codex_chat`
   - input: `session_id?` (UUID), `prompt`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
-  - output: `session_id`, `reply`, `resume_command` (e.g. `codex resume <session_id>`), `usage?`
+  - output: `session_id`, `reply`, `usage?`
 - `codex_plan`
   - input: `session_id?`, `requirements`, `plan`, `constraints?`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
-  - output: `session_id`, `critique`, `resume_command`, `usage?`
+  - output: `session_id`, `critique`, `usage?`
 - `codex_review`
   - input: `session_id?`, `change_summary`, `test_results?`, `open_questions?`, `cwd?`, `model?`, `reasoning_effort?`, `timeout_ms?`
-  - output: `session_id`, `review`, `resume_command`, `usage?`
+  - output: `session_id`, `review`, `usage?`
 
 Backward-compatible tool names are still available: `codex_guard_plan` and `codex_guard_final`.
 
